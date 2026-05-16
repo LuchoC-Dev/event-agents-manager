@@ -6,7 +6,7 @@ import { ok, label, fail, handleError } from "../output.js";
 import type { Project, Agent } from "@eam/shared";
 
 interface AgentConfig {
-  project: { id: string; name: string; description?: string };
+  project: { id?: string; name: string; description?: string };
   backend: { url: string };
 }
 
@@ -39,15 +39,28 @@ export function initCommand() {
 
         // Crear proyecto si no existe
         let project: Project;
-        try {
-          project = await get<Project>(`/projects/${config.project.id}`);
-        } catch {
+        if (config.project.id) {
+          try {
+            project = await get<Project>(`/projects/${config.project.id}`);
+          } catch {
+            project = await post<Project>("/projects", {
+              name: config.project.name,
+              description: config.project.description,
+            });
+            ok(`Proyecto creado: ${project.name}`);
+            // Persistir el id generado en agent.config.json
+            config.project.id = project.id;
+            await writeFile(resolve(opts.config), JSON.stringify(config, null, 2));
+          }
+        } else {
           project = await post<Project>("/projects", {
-            id: config.project.id,
             name: config.project.name,
             description: config.project.description,
           });
           ok(`Proyecto creado: ${project.name}`);
+          // Persistir el id generado en agent.config.json
+          config.project.id = project.id;
+          await writeFile(resolve(opts.config), JSON.stringify(config, null, 2));
         }
 
         // Registrar agente

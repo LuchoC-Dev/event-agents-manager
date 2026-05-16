@@ -16,10 +16,10 @@ export async function projectRoutes(app: FastifyInstance) {
     return project;
   });
 
-  app.post<{ Body: { id?: string; name: string; description?: string } }>("/projects", async (req) => {
+  app.post<{ Body: { name: string; description?: string } }>("/projects", async (req) => {
     const now = new Date();
     const project = {
-      id: req.body.id ?? randomUUID(),
+      id: randomUUID(),
       name: req.body.name,
       description: req.body.description ?? null,
       createdAt: now,
