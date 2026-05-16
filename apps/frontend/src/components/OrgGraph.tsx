@@ -385,10 +385,26 @@ export function OrgGraph({ projection, events, onViewAgent }: Props) {
   useEffect(() => {
     const rawNodes = toFlowNodes(projection, events, onViewAgent);
     const rawEdges = toFlowEdges(projection, events);
-    applyLayout(rawNodes, rawEdges).then((laidOut) => {
-      setNodes(laidOut);
-      setEdges(rawEdges);
+
+    setNodes((current) => {
+      const posMap = new Map(current.map((n) => [n.id, n.position]));
+      const hasNew = rawNodes.some((n) => !posMap.has(n.id));
+
+      if (!hasNew && current.length > 0) {
+        // Solo actualizar data, preservar posiciones
+        return rawNodes.map((n) => ({ ...n, position: posMap.get(n.id) ?? n.position }));
+      }
+
+      // Hay nodos nuevos → correr layout pero preservar posiciones de los existentes
+      const withPositions = rawNodes.map((n) => ({ ...n, position: posMap.get(n.id) ?? n.position }));
+      applyLayout(withPositions, rawEdges).then((laidOut) => {
+        setNodes(laidOut);
+        setEdges(rawEdges);
+      });
+      return current; // retornar current mientras espera el layout
     });
+
+    setEdges(rawEdges);
   }, [projection, onViewAgent, applyLayout, setNodes, setEdges]);
 
   useEffect(() => {

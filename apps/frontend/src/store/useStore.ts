@@ -133,7 +133,6 @@ export const useStore = create<AppState>((set, get) => ({
           }
           if (event === "event:created") {
             store.fetchEvents();
-            store.fetchOrgGraph();
           }
           if (event === "instruction:created" || event === "instruction:updated") {
             store.fetchInstructions();
