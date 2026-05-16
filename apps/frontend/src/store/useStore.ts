@@ -9,31 +9,28 @@ let retryTimer: number | null = null;
 
 interface AppState {
   projects: Project[];
-  activeProject: Project | null;
-
   agents: Agent[];
   threads: Thread[];
   events: AgentEvent[];
   instructions: Instruction[];
   orgGraph: GraphProjection | null;
-
   connected: boolean;
 
   fetchProjects: () => Promise<void>;
-  setActiveProject: (project: Project | null) => void;
   createProject: (name: string, description?: string) => Promise<Project>;
+  loadProject: (projectId: string) => Promise<void>;
 
-  fetchAgents: () => Promise<void>;
-  fetchThreads: () => Promise<void>;
-  fetchOrgGraph: () => Promise<void>;
-  fetchEvents: () => Promise<void>;
-  fetchInstructions: () => Promise<void>;
-  connectWS: () => void;
+  fetchAgents: (projectId: string) => Promise<void>;
+  fetchThreads: (projectId: string) => Promise<void>;
+  fetchOrgGraph: (projectId: string) => Promise<void>;
+  fetchEvents: (projectId: string) => Promise<void>;
+  fetchInstructions: (projectId: string) => Promise<void>;
+  connectWS: (projectId: string) => void;
+  disconnectWS: () => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
   projects: [],
-  activeProject: null,
   agents: [],
   threads: [],
   events: [],
@@ -44,17 +41,6 @@ export const useStore = create<AppState>((set, get) => ({
   fetchProjects: async () => {
     const res = await fetch(`${BASE}/projects`);
     set({ projects: await res.json() });
-  },
-
-  setActiveProject: (project: Project | null) => {
-    set({ activeProject: project, agents: [], threads: [], events: [], instructions: [], orgGraph: null });
-    if (project) {
-      get().fetchAgents();
-      get().fetchThreads();
-      get().fetchOrgGraph();
-      get().fetchEvents();
-      get().fetchInstructions();
-    }
   },
 
   createProject: async (name, description) => {
@@ -68,46 +54,48 @@ export const useStore = create<AppState>((set, get) => ({
     return project;
   },
 
-  fetchAgents: async () => {
-    const { activeProject } = get();
-    if (!activeProject) return;
-    const res = await fetch(`${BASE}/projects/${activeProject.id}/agents`);
+  loadProject: async (projectId) => {
+    set({ agents: [], threads: [], events: [], instructions: [], orgGraph: null });
+    const { fetchAgents, fetchThreads, fetchOrgGraph, fetchEvents, fetchInstructions } = get();
+    await Promise.all([
+      fetchAgents(projectId),
+      fetchThreads(projectId),
+      fetchOrgGraph(projectId),
+      fetchEvents(projectId),
+      fetchInstructions(projectId),
+    ]);
+  },
+
+  fetchAgents: async (projectId) => {
+    const res = await fetch(`${BASE}/projects/${projectId}/agents`);
     set({ agents: await res.json() });
   },
 
-  fetchThreads: async () => {
-    const { activeProject } = get();
-    if (!activeProject) return;
-    const res = await fetch(`${BASE}/projects/${activeProject.id}/threads`);
+  fetchThreads: async (projectId) => {
+    const res = await fetch(`${BASE}/projects/${projectId}/threads`);
     set({ threads: await res.json() });
   },
 
-  fetchOrgGraph: async () => {
-    const { activeProject } = get();
-    if (!activeProject) return;
-    const res = await fetch(`${BASE}/projects/${activeProject.id}/graph/org`);
+  fetchOrgGraph: async (projectId) => {
+    const res = await fetch(`${BASE}/projects/${projectId}/graph/org`);
     set({ orgGraph: await res.json() });
   },
 
-  fetchEvents: async () => {
-    const { activeProject } = get();
-    if (!activeProject) return;
-    const res = await fetch(`${BASE}/projects/${activeProject.id}/events`);
+  fetchEvents: async (projectId) => {
+    const res = await fetch(`${BASE}/projects/${projectId}/events`);
     const data = await res.json();
     set({ events: Array.isArray(data) ? data.sort((a: AgentEvent, b: AgentEvent) => a.sequenceNumber - b.sequenceNumber) : [] });
   },
 
-  fetchInstructions: async () => {
-    const { activeProject } = get();
-    if (!activeProject) return;
-    const res = await fetch(`${BASE}/projects/${activeProject.id}/instructions`);
+  fetchInstructions: async (projectId) => {
+    const res = await fetch(`${BASE}/projects/${projectId}/instructions`);
     set({ instructions: await res.json() });
   },
 
-  connectWS: () => {
-    if (wsInstance) {
-      if (wsInstance.readyState === WebSocket.OPEN || wsInstance.readyState === WebSocket.CONNECTING) return;
-    }
+  connectWS: (projectId) => {
+    if (wsInstance && (wsInstance.readyState === WebSocket.OPEN || wsInstance.readyState === WebSocket.CONNECTING)) return;
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+
     let retryDelay = 1000;
     const connect = () => {
       const ws = new WebSocket(WS_URL);
@@ -123,19 +111,18 @@ export const useStore = create<AppState>((set, get) => ({
         try {
           const { event } = JSON.parse(msg.data) as { event: string };
           const store = get();
-          if (!store.activeProject) return;
           if (event === "agent:created" || event === "agent:updated") {
-            store.fetchAgents();
-            store.fetchOrgGraph();
+            store.fetchAgents(projectId);
+            store.fetchOrgGraph(projectId);
           }
           if (event === "thread:created" || event === "thread:updated") {
-            store.fetchThreads();
+            store.fetchThreads(projectId);
           }
           if (event === "event:created") {
-            store.fetchEvents();
+            store.fetchEvents(projectId);
           }
           if (event === "instruction:created" || event === "instruction:updated") {
-            store.fetchInstructions();
+            store.fetchInstructions(projectId);
           }
           if (event === "project:created" || event === "project:updated") {
             store.fetchProjects();
@@ -146,5 +133,11 @@ export const useStore = create<AppState>((set, get) => ({
       };
     };
     connect();
+  },
+
+  disconnectWS: () => {
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+    if (wsInstance) { wsInstance.onclose = null; wsInstance.close(); wsInstance = null; }
+    set({ connected: false });
   },
 }));
