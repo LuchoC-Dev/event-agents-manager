@@ -121,6 +121,7 @@ export default function App() {
           {view === "org" && orgGraph && orgGraph.nodes.length > 0 && (
             <div style={{ height: "100%" }}>
               <OrgGraph
+                projectId={activeProject.id}
                 projection={orgGraph}
                 events={events}
                 onViewAgent={(agentId) => {

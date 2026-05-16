@@ -372,40 +372,86 @@ function toFlowEdges(projection: GraphProjection, events: AgentEvent[]): Edge[] 
 }
 
 interface Props {
+  projectId: string;
   projection: GraphProjection;
   events: AgentEvent[];
   onViewAgent: (agentId: string) => void;
 }
 
-export function OrgGraph({ projection, events, onViewAgent }: Props) {
+function posKey(projectId: string) {
+  return `eam:org-positions:${projectId}`;
+}
+
+function loadPositions(projectId: string): Map<string, { x: number; y: number }> {
+  try {
+    const raw = localStorage.getItem(posKey(projectId));
+    if (!raw) return new Map();
+    return new Map(Object.entries(JSON.parse(raw)));
+  } catch {
+    return new Map();
+  }
+}
+
+function savePositions(projectId: string, nodes: Node[]) {
+  const obj = Object.fromEntries(nodes.map((n) => [n.id, n.position]));
+  localStorage.setItem(posKey(projectId), JSON.stringify(obj));
+}
+
+export function OrgGraph({ projectId, projection, events, onViewAgent }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { applyLayout } = useElkLayout();
+
+  const handleNodesChange = useCallback((changes: Parameters<typeof onNodesChange>[0]) => {
+    onNodesChange(changes);
+    const hasDrag = changes.some((c) => c.type === "position" && !c.dragging);
+    if (hasDrag) {
+      setNodes((current) => { savePositions(projectId, current); return current; });
+    }
+  }, [onNodesChange, setNodes, projectId]);
 
   useEffect(() => {
     const rawNodes = toFlowNodes(projection, events, onViewAgent);
     const rawEdges = toFlowEdges(projection, events);
 
     setNodes((current) => {
-      const posMap = new Map(current.map((n) => [n.id, n.position]));
+      const posMap = current.length > 0
+        ? new Map(current.map((n) => [n.id, n.position]))
+        : loadPositions(projectId);
+
       const hasNew = rawNodes.some((n) => !posMap.has(n.id));
 
       if (!hasNew && current.length > 0) {
-        // Solo actualizar data, preservar posiciones
         return rawNodes.map((n) => ({ ...n, position: posMap.get(n.id) ?? n.position }));
       }
 
-      // Hay nodos nuevos → correr layout pero preservar posiciones de los existentes
-      const withPositions = rawNodes.map((n) => ({ ...n, position: posMap.get(n.id) ?? n.position }));
-      applyLayout(withPositions, rawEdges).then((laidOut) => {
-        setNodes(laidOut);
+      const needLayout = rawNodes.filter((n) => !posMap.has(n.id));
+      const hasSaved = rawNodes.filter((n) => posMap.has(n.id));
+
+      if (needLayout.length === 0) {
+        // Todos tienen posición guardada — aplicar directamente sin ELK
+        const restored = rawNodes.map((n) => ({ ...n, position: posMap.get(n.id)! }));
+        setNodes(restored);
         setEdges(rawEdges);
+        return restored;
+      }
+
+      // Solo layoutear los que no tienen posición
+      applyLayout(needLayout, rawEdges).then((laidOut) => {
+        const posLaidOut = new Map(laidOut.map((n) => [n.id, n.position]));
+        const merged = rawNodes.map((n) => ({
+          ...n,
+          position: posMap.get(n.id) ?? posLaidOut.get(n.id) ?? n.position,
+        }));
+        setNodes(merged);
+        setEdges(rawEdges);
+        savePositions(projectId, merged);
       });
-      return current; // retornar current mientras espera el layout
+      return current;
     });
 
     setEdges(rawEdges);
-  }, [projection, onViewAgent, applyLayout, setNodes, setEdges]);
+  }, [projection, onViewAgent, applyLayout, setNodes, setEdges, projectId]);
 
   useEffect(() => {
     setNodes((nds) => nds.map((node) => ({
@@ -423,7 +469,7 @@ export function OrgGraph({ projection, events, onViewAgent }: Props) {
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
