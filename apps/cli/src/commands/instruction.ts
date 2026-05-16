@@ -3,6 +3,14 @@ import { get, post, loadSession } from "../api.js";
 import { table, ok, label, fail, handleError, info } from "../output.js";
 import type { Instruction, Agent, AgentEvent } from "@eam/shared";
 
+async function resolveInstructionId(projectId: string, id: string): Promise<string> {
+  if (id.length === 36) return id;
+  const all = await get<Instruction[]>(`/projects/${projectId}/instructions`);
+  const match = all.find((i) => i.id.startsWith(id));
+  if (!match) { fail(`No se encontró instrucción con prefijo "${id}"`); process.exit(1); }
+  return match.id;
+}
+
 async function requireSession() {
   const session = await loadSession();
   if (!session) fail("No hay sesión activa. Ejecutá: eam init --role <rol>");
@@ -40,7 +48,7 @@ export function instructionCommand() {
         table(
           ["ID", "De", "Status", "Body", "Fecha"],
           instructions.map((i) => [
-            i.id.slice(0, 8),
+            i.id,
             agentMap[i.senderAgentId] ?? i.senderAgentId.slice(0, 8),
             statusColor(i.status),
             i.body.slice(0, 50) + (i.body.length > 50 ? "..." : ""),
@@ -70,7 +78,7 @@ export function instructionCommand() {
         table(
           ["ID", "Para", "Status", "Body", "Fecha"],
           instructions.map((i) => [
-            i.id.slice(0, 8),
+            i.id,
             agentMap[i.receiverAgentId] ?? i.receiverAgentId.slice(0, 8),
             statusColor(i.status),
             i.body.slice(0, 50) + (i.body.length > 50 ? "..." : ""),
@@ -108,12 +116,20 @@ export function instructionCommand() {
   // SHOW
   cmd
     .command("show <instructionId>")
-    .description("Ver detalle de una instrucción con su historial de eventos")
+    .description("Ver detalle de una instrucción con su historial de eventos (acepta prefijo del ID)")
     .action(async (id, opts) => {
       try {
         const session = await requireSession();
+        // Si el id es un prefijo (< 36 chars), buscar el id completo en el listado
+        let fullId = id;
+        if (id.length < 36) {
+          const all = await get<Instruction[]>(`/projects/${session.projectId}/instructions`);
+          const match = all.find((i) => i.id.startsWith(id));
+          if (!match) { fail(`No se encontró instrucción con prefijo "${id}"`); return; }
+          fullId = match.id;
+        }
         const inst = await get<Instruction & { events: AgentEvent[]; relations: unknown[] }>(
-          `/projects/${session.projectId}/instructions/${id}`
+          `/projects/${session.projectId}/instructions/${fullId}`
         );
         const agents = await get<Agent[]>(`/projects/${session.projectId}/agents`);
         const agentMap = Object.fromEntries(agents.map((a) => [a.id, a.name]));
@@ -147,88 +163,95 @@ export function instructionCommand() {
   // ACCEPT
   cmd
     .command("accept <instructionId>")
-    .description("Aceptar una instrucción")
+    .description("Aceptar una instrucción (acepta prefijo del ID)")
     .action(async (id) => {
       try {
         const session = await requireSession();
-        await post(`/projects/${session.projectId}/instructions/${id}/accept`, { agentId: session.agentId });
-        ok(`Instrucción ${id.slice(0, 8)} aceptada`);
+        const fullId = await resolveInstructionId(session.projectId, id);
+        await post(`/projects/${session.projectId}/instructions/${fullId}/accept`, { agentId: session.agentId });
+        ok(`Instrucción ${fullId.slice(0, 8)} aceptada`);
       } catch (e) { handleError(e); }
     });
 
   // REJECT
   cmd
     .command("reject <instructionId>")
-    .description("Rechazar una instrucción")
+    .description("Rechazar una instrucción (acepta prefijo del ID)")
     .option("--reason <texto>", "Motivo del rechazo")
     .action(async (id, opts) => {
       try {
         const session = await requireSession();
-        await post(`/projects/${session.projectId}/instructions/${id}/reject`, { agentId: session.agentId, reason: opts.reason });
-        ok(`Instrucción ${id.slice(0, 8)} rechazada`);
+        const fullId = await resolveInstructionId(session.projectId, id);
+        await post(`/projects/${session.projectId}/instructions/${fullId}/reject`, { agentId: session.agentId, reason: opts.reason });
+        ok(`Instrucción ${fullId.slice(0, 8)} rechazada`);
       } catch (e) { handleError(e); }
     });
 
   // RESPOND
   cmd
     .command("respond <instructionId>")
-    .description("Responder una instrucción (parcialmente)")
+    .description("Responder una instrucción (parcialmente, acepta prefijo del ID)")
     .requiredOption("--body <texto>", "Contenido de la respuesta")
     .action(async (id, opts) => {
       try {
         const session = await requireSession();
-        await post(`/projects/${session.projectId}/instructions/${id}/respond`, { agentId: session.agentId, body: opts.body });
-        ok(`Instrucción ${id.slice(0, 8)} respondida`);
+        const fullId = await resolveInstructionId(session.projectId, id);
+        await post(`/projects/${session.projectId}/instructions/${fullId}/respond`, { agentId: session.agentId, body: opts.body });
+        ok(`Instrucción ${fullId.slice(0, 8)} respondida`);
       } catch (e) { handleError(e); }
     });
 
   // COMPLETE
   cmd
     .command("complete <instructionId>")
-    .description("Completar una instrucción")
+    .description("Completar una instrucción (acepta prefijo del ID)")
     .option("--body <texto>", "Resultado o resumen del trabajo completado")
     .action(async (id, opts) => {
       try {
         const session = await requireSession();
-        await post(`/projects/${session.projectId}/instructions/${id}/complete`, { agentId: session.agentId, body: opts.body });
-        ok(`Instrucción ${id.slice(0, 8)} completada`);
+        const fullId = await resolveInstructionId(session.projectId, id);
+        await post(`/projects/${session.projectId}/instructions/${fullId}/complete`, { agentId: session.agentId, body: opts.body });
+        ok(`Instrucción ${fullId.slice(0, 8)} completada`);
       } catch (e) { handleError(e); }
     });
 
   // CANCEL
   cmd
     .command("cancel <instructionId>")
-    .description("Cancelar una instrucción")
+    .description("Cancelar una instrucción (acepta prefijo del ID)")
     .action(async (id) => {
       try {
         const session = await requireSession();
-        await post(`/projects/${session.projectId}/instructions/${id}/cancel`, { agentId: session.agentId });
-        ok(`Instrucción ${id.slice(0, 8)} cancelada`);
+        const fullId = await resolveInstructionId(session.projectId, id);
+        await post(`/projects/${session.projectId}/instructions/${fullId}/cancel`, { agentId: session.agentId });
+        ok(`Instrucción ${fullId.slice(0, 8)} cancelada`);
       } catch (e) { handleError(e); }
     });
 
   // REVIEW REQUEST
   cmd
     .command("review-request <instructionId>")
-    .description("Solicitar revisión de una instrucción")
+    .description("Solicitar revisión de una instrucción (acepta prefijo del ID)")
     .requiredOption("--reviewer <agentId>", "ID del agente revisor")
     .action(async (id, opts) => {
       try {
         const session = await requireSession();
-        await post(`/projects/${session.projectId}/instructions/${id}/review-request`, { agentId: session.agentId, reviewerAgentId: opts.reviewer });
-        ok(`Revisión solicitada para ${id.slice(0, 8)}`);
+        const fullId = await resolveInstructionId(session.projectId, id);
+        await post(`/projects/${session.projectId}/instructions/${fullId}/review-request`, { agentId: session.agentId, reviewerAgentId: opts.reviewer });
+        ok(`Revisión solicitada para ${fullId.slice(0, 8)}`);
       } catch (e) { handleError(e); }
     });
 
   // RETRY
   cmd
     .command("retry <instructionId>")
-    .description("Marcar una instrucción para reintento")
+    .description("Marcar una instrucción para reintento (acepta prefijo del ID)")
     .action(async (id) => {
       try {
         const session = await requireSession();
-        await post(`/projects/${session.projectId}/instructions/${id}/retry`, { agentId: session.agentId });
-        ok(`Reintento solicitado para ${id.slice(0, 8)}`);
+        const fullId = await resolveInstructionId(session.projectId, id);
+        await post(`/projects/${session.projectId}/instructions/${fullId}/retry`, { agentId: session.agentId });
+        ok(`Reintento solicitado para ${fullId.slice(0, 8)}`);
       } catch (e) { handleError(e); }
     });
 

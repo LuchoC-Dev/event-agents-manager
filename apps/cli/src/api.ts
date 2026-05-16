@@ -8,27 +8,32 @@ export function setBaseUrl(url: string) {
 }
 
 export async function loadSession(role?: string): Promise<{ agentId: string; projectId: string; role: string; backendUrl: string } | null> {
-  // If role given, try that slug; otherwise look for any session
-  const tryLoad = async (slug: string) => {
+  const tryLoad = async (path: string) => {
     try {
-      const raw = await readFile(resolve(`.agents/${slug}/session.json`), "utf-8");
+      const raw = await readFile(resolve(path), "utf-8");
       return JSON.parse(raw);
     } catch {
       return null;
     }
   };
 
-  if (role) {
-    const slug = role.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    return tryLoad(slug);
+  const effectiveRole = role ?? process.env.EAM_ROLE;
+  if (effectiveRole) {
+    const slug = effectiveRole.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    return tryLoad(`.agents/${slug}/session.json`);
   }
 
-  // Try to find any session
+  // Primero: sesión activa explícita (eam session use <role>)
+  const active = await tryLoad(".agents/active.json");
+  if (active) return active;
+
+  // Fallback: primera sesión encontrada en .agents/*/session.json
   try {
     const { readdir } = await import("fs/promises");
     const dirs = await readdir(resolve(".agents"));
     for (const dir of dirs) {
-      const s = await tryLoad(dir);
+      if (dir === "active.json") continue;
+      const s = await tryLoad(`.agents/${dir}/session.json`);
       if (s) return s;
     }
   } catch { }

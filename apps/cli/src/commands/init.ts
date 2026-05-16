@@ -20,11 +20,20 @@ interface Session {
 export function initCommand() {
   const cmd = new Command("init")
     .description("Inicializar agente en el sistema organizacional")
-    .requiredOption("-r, --role <rol>", "Rol organizacional del agente (ej: 'Frontend Lead')")
+    .option("-r, --role <rol>", "Rol organizacional del agente (ej: 'Frontend Lead')")
+    .addHelpText("after", "\nEjemplos:\n  eam init -r \"Tech Lead\"\n  eam init --role \"Backend Developer\" --name \"Backend Dev\"")
     .option("-n, --name <nombre>", "Nombre del agente (por defecto usa el rol)")
     .option("-c, --config <path>", "Path al agent.config.json", "./agent.config.json")
     .action(async (opts) => {
       try {
+        // Permitir --role desde el root (eam --role "X" init) o como opción propia (-r / --role)
+        const role = opts.role ?? process.env.EAM_ROLE;
+        if (!role) {
+          fail("Especificá el rol con -r o --role (ej: eam init -r \"Tech Lead\")");
+          return;
+        }
+        opts.role = role;
+
         // Leer config
         let config: AgentConfig;
         try {
@@ -77,18 +86,26 @@ export function initCommand() {
         label("Proyecto", project.id);
         label("Backend", config.backend.url);
 
-        // Guardar sesión en .agents/<role-slug>/session.json
+        // Guardar sesión en .agents/<role-slug>/session.json (no pisar si ya existe)
         const slug = opts.role.toLowerCase().replace(/[^a-z0-9]+/g, "-");
         const sessionDir = resolve(`.agents/${slug}`);
         await mkdir(sessionDir, { recursive: true });
 
-        const session: Session = {
-          agentId: agent.id,
-          projectId: project.id,
-          role: opts.role,
-          backendUrl: config.backend.url,
-        };
-        await writeFile(resolve(sessionDir, "session.json"), JSON.stringify(session, null, 2));
+        const sessionPath = resolve(sessionDir, "session.json");
+        let session: Session;
+        try {
+          const existing = JSON.parse(await readFile(sessionPath, "utf-8")) as Session;
+          session = existing;
+          ok(`Sesión existente recuperada para rol "${opts.role}" (agentId: ${existing.agentId.slice(0, 8)})`);
+        } catch {
+          session = {
+            agentId: agent.id,
+            projectId: project.id,
+            role: opts.role,
+            backendUrl: config.backend.url,
+          };
+          await writeFile(sessionPath, JSON.stringify(session, null, 2));
+        }
 
         // Descargar e imprimir el protocolo
         console.log("\n" + "─".repeat(60));
@@ -100,8 +117,12 @@ export function initCommand() {
         } catch {
           console.log("(No se pudo cargar el protocolo desde el backend)");
         }
+        // Marcar como sesión activa
+        await writeFile(resolve(".agents/active.json"), JSON.stringify(session, null, 2));
+
         console.log("─".repeat(60));
         console.log(`\nSesión guardada en .agents/${slug}/session.json`);
+        console.log("Sesión activa: " + slug + " (eam session use <rol> para cambiar)");
         console.log("Estás listo para operar organizacionalmente.\n");
 
       } catch (e) { handleError(e); }
