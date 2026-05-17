@@ -13,7 +13,7 @@ async function resolveInstructionId(projectId: string, id: string): Promise<stri
 
 async function requireSession() {
   const session = await loadSession();
-  if (!session) fail("No hay sesión activa. Ejecutá: eam init --role <rol>");
+  if (!session) fail("No hay sesión activa. Ejecutá: evam init --role <rol>");
   return session!;
 }
 

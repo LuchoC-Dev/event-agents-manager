@@ -10,10 +10,10 @@ import { instructionCommand } from "./commands/instruction.js";
 import { sessionCommand } from "./commands/session.js";
 
 program
-  .name("eam")
+  .name("evam")
   .description("Event Agent Manager CLI")
   .version("0.1.0")
-  .option("--role <rol>", "Rol del agente activo (override de sesión, ej: eam --role 'Tech Lead' instruction inbox)")
+  .option("--role <rol>", "Rol del agente activo (override de sesión, ej: evam --role 'Tech Lead' instruction inbox)")
   .hook("preAction", (thisCommand) => {
     const role = thisCommand.opts().role as string | undefined;
     if (role) process.env.EAM_ROLE = role;

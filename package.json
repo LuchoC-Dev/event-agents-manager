@@ -9,7 +9,7 @@
     "build:frontend": "pnpm --filter frontend build",
     "db:push": "pnpm --filter backend db:push",
     "db:studio": "pnpm --filter backend db:studio",
-    "eam": "pnpm --filter @eam/cli dev"
+    "evam": "pnpm --filter @eam/cli dev"
   },
   "packageManager": "pnpm@10.30.3"
 }

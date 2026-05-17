@@ -7,7 +7,7 @@ async function resolveProject(opts: { project?: string }): Promise<string> {
   if (opts.project) return opts.project;
   const session = await loadSession();
   if (session?.projectId) return session.projectId;
-  console.error("Error: no hay sesión activa. Usá -p <projectId> o corré eam init primero.");
+  console.error("Error: no hay sesión activa. Usá -p <projectId> o corré evam init primero.");
   process.exit(1);
 }
 

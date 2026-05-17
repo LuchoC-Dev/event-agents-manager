@@ -23,7 +23,7 @@ export async function loadSession(role?: string): Promise<{ agentId: string; pro
     return tryLoad(`.agents/${slug}/session.json`);
   }
 
-  // Primero: sesión activa explícita (eam session use <role>)
+  // Primero: sesión activa explícita (evam session use <role>)
   const active = await tryLoad(".agents/active.json");
   if (active) return active;
 

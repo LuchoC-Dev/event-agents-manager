@@ -13,7 +13,7 @@ export function projectCommand() {
       try {
         const projects = await get<Project[]>("/projects");
         if (projects.length === 0) {
-          console.log("No hay proyectos. Creá uno con: eam project create <nombre>");
+          console.log("No hay proyectos. Creá uno con: evam project create <nombre>");
           return;
         }
         table(

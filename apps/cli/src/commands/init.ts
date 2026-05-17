@@ -21,15 +21,15 @@ export function initCommand() {
   const cmd = new Command("init")
     .description("Inicializar agente en el sistema organizacional")
     .option("-r, --role <rol>", "Rol organizacional del agente (ej: 'Frontend Lead')")
-    .addHelpText("after", "\nEjemplos:\n  eam init -r \"Tech Lead\"\n  eam init --role \"Backend Developer\" --name \"Backend Dev\"")
+    .addHelpText("after", "\nEjemplos:\n  evam init -r \"Tech Lead\"\n  evam init --role \"Backend Developer\" --name \"Backend Dev\"")
     .option("-n, --name <nombre>", "Nombre del agente (por defecto usa el rol)")
     .option("-c, --config <path>", "Path al agent.config.json", "./agent.config.json")
     .action(async (opts) => {
       try {
-        // Permitir --role desde el root (eam --role "X" init) o como opción propia (-r / --role)
+        // Permitir --role desde el root (evam --role "X" init) o como opción propia (-r / --role)
         const role = opts.role ?? process.env.EAM_ROLE;
         if (!role) {
-          fail("Especificá el rol con -r o --role (ej: eam init -r \"Tech Lead\")");
+          fail("Especificá el rol con -r o --role (ej: evam init -r \"Tech Lead\")");
           return;
         }
         opts.role = role;
@@ -122,7 +122,7 @@ export function initCommand() {
 
         console.log("─".repeat(60));
         console.log(`\nSesión guardada en .agents/${slug}/session.json`);
-        console.log("Sesión activa: " + slug + " (eam session use <rol> para cambiar)");
+        console.log("Sesión activa: " + slug + " (evam session use <rol> para cambiar)");
         console.log("Estás listo para operar organizacionalmente.\n");
 
       } catch (e) { handleError(e); }

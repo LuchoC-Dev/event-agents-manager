@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "eam": "./bin/eam.js"
+    "evam": "./bin/eam.js"
   },
   "scripts": {
     "dev": "tsx src/index.ts",

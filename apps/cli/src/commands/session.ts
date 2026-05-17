@@ -16,7 +16,7 @@ export function sessionCommand() {
       try {
         const session = await loadSession();
         if (!session) {
-          info("No hay sesión activa. Ejecutá: eam init --role <rol>");
+          info("No hay sesión activa. Ejecutá: evam init --role <rol>");
           return;
         }
         label("Agent ID", session.agentId);
@@ -47,7 +47,7 @@ export function sessionCommand() {
   // Cambiar sesión activa escribiendo un symlink lógico en .agents/session.json
   cmd
     .command("use <role>")
-    .description("Cambiar la sesión activa a otro rol (ej: eam session use backend-developer)")
+    .description("Cambiar la sesión activa a otro rol (ej: evam session use backend-developer)")
     .action(async (role) => {
       try {
         const slug = role.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -56,7 +56,7 @@ export function sessionCommand() {
         try {
           raw = await readFile(sessionPath, "utf-8");
         } catch {
-          fail(`No existe sesión para "${slug}". Revisá eam session list.`);
+          fail(`No existe sesión para "${slug}". Revisá evam session list.`);
           return;
         }
         // Escribir la sesión activa en .agents/active.json
